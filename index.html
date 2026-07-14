@@ -1,21 +1,69 @@
-// Kayıt kısmındaki tıklama fonksiyonunu güncelliyoruz
-canvas.addEventListener('click', (event) => {
-    if (!isImageLoaded) return;
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Biyometrik Kayıt - Nokta Bazlı</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f0f0f0; }
+        #canvas { border: 5px solid #333; cursor: crosshair; background: #000; }
+        .controls { margin: 20px; }
+        button { padding: 10px 20px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2>1. Adım: Yüzünü İşaretle</h2>
+    <div id="media-area">
+        <canvas id="canvas" width="400" height="400"></canvas>
+    </div>
+    <div class="controls">
+        <input type="file" id="upload">
+        <button onclick="savePoints()">Biyometrik Haritayı Kaydet</button>
+    </div>
 
-    // Kullanıcıya bu noktanın ne olduğunu soralım (Basit bir prompt)
-    const label = prompt("Bu nokta neyi temsil ediyor? (Örn: Göz-Mavi, Agiz-Kirisik)", "Göz-Mavi");
-    if (!label) return;
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    
+    // Firebase Config (Öncekiyle aynı)
+    const firebaseConfig = { /* ... firebaseConfig içeriğin ... */ };
+    const db = getDatabase(initializeApp(firebaseConfig));
 
-    const rect = canvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let points = [];
+    let imgData = "";
 
-    selectedPoints.push({ x, y, label }); // Artık 'label'ı da kaydediyoruz!
+    // Resim Yükleme
+    document.getElementById('upload').addEventListener('change', (e) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => { ctx.drawImage(img, 0, 0, 400, 400); imgData = canvas.toDataURL(); }
+            img.src = event.target.result;
+        }
+        reader.readAsDataURL(e.target.files[0]);
+    });
 
-    // Görsel geri bildirim (kırmızı daire)
-    ctx.fillStyle = '#ff0000';
-    ctx.beginPath();
-    ctx.arc(x, y, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillText(label, x + 10, y); // Ekrana etiketi yaz
-});
+    // Nokta Ekleme
+    canvas.addEventListener('click', (e) => {
+        const label = prompt("Bu noktanın adı nedir? (Örn: Ağız Merkezi)");
+        if (!label) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        points.push({ x, y, label });
+        
+        ctx.fillStyle = "yellow";
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI*2); ctx.fill();
+        ctx.fillText(label, x+10, y);
+    });
+
+    window.savePoints = () => {
+        set(ref(db, 'biometricGame/profile'), { points, image: imgData });
+        alert("Harita kaydedildi!");
+    };
+</script>
+</body>
+</html>
