@@ -2,68 +2,87 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Biyometrik Kayıt - Nokta Bazlı</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kayıt Alanı</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f0f0f0; }
-        #canvas { border: 5px solid #333; cursor: crosshair; background: #000; }
-        .controls { margin: 20px; }
-        button { padding: 10px 20px; cursor: pointer; }
+        body { font-family: Arial, sans-serif; text-align: center; background: #f4f4f9; }
+        .rules { background: #ffeaa7; padding: 15px; border-radius: 8px; margin: 10px auto; max-width: 500px; text-align: left; font-weight: bold; }
+        .rules p { margin: 5px 0; }
+        video { width: 100%; max-width: 400px; transform: scaleX(-1); border-radius: 8px; margin-top: 10px; background: #000; }
+        canvas { display: none; }
+        .controls { margin-top: 20px; }
+        select, button { padding: 10px; font-size: 16px; cursor: pointer; }
+        button { background: #007bff; color: white; border: none; border-radius: 5px; }
     </style>
 </head>
 <body>
-    <h2>1. Adım: Yüzünü İşaretle</h2>
-    <div id="media-area">
-        <canvas id="canvas" width="400" height="400"></canvas>
+
+    <div class="rules">
+        <p>1_ Lütfen alnınızı açık tutun</p>
+        <p>2_ Gözlerinizi kameradan ayırmayın dik bakın</p>
+        <p>3_ Gülümseyin</p>
     </div>
+
+    <h2>Kayıt Alanı: Fotoğraf Çek</h2>
+    <video id="camera" autoplay playsinline></video>
+    <canvas id="snapshot"></canvas>
+
     <div class="controls">
-        <input type="file" id="upload">
-        <button onclick="savePoints()">Biyometrik Haritayı Kaydet</button>
+        <label for="hedefSecim">Taranacak Alanı İşaretle:</label>
+        <select id="hedefSecim">
+            <option value="agiz">Sadece Ağız</option>
+            <option value="goz">Sadece Göz</option>
+            <option value="agiz_ve_goz">Ağız ve Göz Birlikte</option>
+        </select>
+        <br><br>
+        <button id="captureBtn">Fotoğrafı Çek ve Tarama Alanına Gönder</button>
     </div>
 
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-    
-    // Firebase Config (Öncekiyle aynı)
-    const firebaseConfig = { /* ... firebaseConfig içeriğin ... */ };
-    const db = getDatabase(initializeApp(firebaseConfig));
-
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    let points = [];
-    let imgData = "";
-
-    // Resim Yükleme
-    document.getElementById('upload').addEventListener('change', (e) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => { ctx.drawImage(img, 0, 0, 400, 400); imgData = canvas.toDataURL(); }
-            img.src = event.target.result;
-        }
-        reader.readAsDataURL(e.target.files[0]);
-    });
-
-    // Nokta Ekleme
-    canvas.addEventListener('click', (e) => {
-        const label = prompt("Bu noktanın adı nedir? (Örn: Ağız Merkezi)");
-        if (!label) return;
+    <script>
+        // 1. KENDİ FİREBASE BİLGİLERİNİ BURAYA GİR
+        const firebaseConfig = {
+            apiKey: "SENIN_API_KEY",
+            authDomain: "SENIN_PROJEN.firebaseapp.com",
+            databaseURL: "https://SENIN_PROJEN.firebaseio.com",
+            projectId: "SENIN_PROJEN",
+            storageBucket: "SENIN_PROJEN.appspot.com",
+            messagingSenderId: "SENDER_ID",
+            appId: "APP_ID"
+        };
         
-        const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        
-        points.push({ x, y, label });
-        
-        ctx.fillStyle = "yellow";
-        ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI*2); ctx.fill();
-        ctx.fillText(label, x+10, y);
-    });
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
 
-    window.savePoints = () => {
-        set(ref(db, 'biometricGame/profile'), { points, image: imgData });
-        alert("Harita kaydedildi!");
-    };
-</script>
+        // 2. Kamera Başlatma
+        const video = document.getElementById('camera');
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => video.srcObject = stream)
+            .catch(err => alert("Kamera açılamadı: " + err));
+
+        // 3. Fotoğraf Çek ve Firebase'e Gönder
+        document.getElementById('captureBtn').addEventListener('click', () => {
+            const canvas = document.getElementById('snapshot');
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const imageData = canvas.toDataURL('image/jpeg'); // Fotoğrafı Base64'e çevir
+            const hedef = document.getElementById('hedefSecim').value;
+
+            // Firebase'de "biyometrik_islem" adlı düğüme veriyi yazıyoruz
+            db.ref('biyometrik_islem').set({
+                fotoğraf: imageData,
+                secilenHedef: hedef,
+                zaman: Date.now()
+            }).then(() => {
+                alert("Fotoğraf ve işaretleme başarıyla Tarama Alanına gönderildi!");
+            }).catch(error => {
+                console.error("Hata oluştu:", error);
+            });
+        });
+    </script>
 </body>
 </html>
